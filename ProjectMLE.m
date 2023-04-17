@@ -24,17 +24,17 @@ k = 20;
 kvec = 10:2:20;
 IterK = length(kvec);
 M = 2^k;
-MaxIter = 100;
+MaxIter = 10;
 
 % Data matrices:
 phiData = zeros(MaxIter,IterK, IterSnr);
 omegaData = zeros(MaxIter,IterK, IterSnr);
-crlbPhiData = zeros(MaxIter, IterK, IterSnr);
-crlbOmegaData = zeros(MaxIter, IterK, IterSnr);
+crlbPhiData = zeros(MaxIter, IterSnr);
+crlbOmegaData = zeros(MaxIter, IterSnr);
 for i = 1:MaxIter
-    for jk = 1:length(kvec)
+    for jk = 1:IterK
         M = 2^kvec(jk);
-        for jsnr = 1:length(SNRvec)
+        for jsnr = 1:IterSnr
             SNR = SNRvec(jsnr);
             % For every k, caclulate for all SNR values.
             % White noise signal:
@@ -60,14 +60,52 @@ for i = 1:MaxIter
             % Store data
             phiData(i, jk, jsnr) = phiEst;
             omegaData(i, jk, jsnr) = wFFT;
-            crlbPhiData(i, jk, jsnr) = crlbPhase;
-            crlbOmegaData(i, jk, jsnr) = crlbFreq;
+            crlbPhiData(i, jsnr) = crlbPhase;
+            crlbOmegaData(i, jsnr) = crlbFreq;
         end
     end
 end
 % Store data:
+save("Data1a", "phiData", "omegaData", "crlbPhiData", "crlbOmegaData");
+%save("Data1aAscii", "phiData", "omegaData", "crlbPhiData","crlbOmegaData", "-ascii", "-double", "-tabs"); 
+%Must convert to 2D array if textfile
+%% Create plots:
+load("Data1a.mat")
+SNRvec = -10:10:60;
+kvec = 10:2:20;
+%1)
+% Variasn til wFFT mot CRLB for k og snr
+f1 = figure(1); clf(f1);
+title("Variance for ")
+subplot(121);
+hold on; grid on;
+crlbW = log((crlbOmegaData./(4*(pi^2)))); % Nå i Hz^2
+% ønsker var av freqError
+varW = VarData(omegaData);
+plot(SNRvec, crlbW, 'b', "LineWidth", 2);
+i = 1;
+cleanVecs = [1, 1, 3, 5, 6, 7];  % mh...
+for k = 1:IterK
+    plot(SNRvec(1:cleanVecs(i)), log(varW(k, 1:cleanVecs(i))), "LineWidth", 2);
+    i = i + 1;
+end
+legend("CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}")
+% Varians til phiEst mot CRLB for k og snr
+subplot(122);
+hold on; grid on;
+crlbPhi = (MeanCRLB(crlbPhiData));
+varPhi = VarData(phiData);
+plot(SNRvec, log(crlbPhi), 'b', "LineWidth", 2);
+for k= 1:IterK
+    plot(SNRvec, log(varPhi(k, :)), "LineWidth", 2);
+end
+legend("CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+exportgraphics(f1, "VarPhiOmega.eps")
 
-% Create plots:
+% 2)
+% Gjennosnittlig frekvesnavvik wFFT mot w0 for k og snr
+% Gjnsnlig faseavvik phiEst mot phi for k og snr
+
 
 
 %% Fminsearch
@@ -113,4 +151,17 @@ function mse = fun(w, absxFFT, n0, n, N, T, A, z, M, x)
     sFFT = abs(fft([A*sin(w*n+phiNew) zeros(1, z)], M));
     error = absxFFT - sFFT;
     mse = sqrt(mean((error).^2));
+end
+
+function crlb = MeanCRLB(crlbData)
+    crlb = var(crlbData);
+end
+
+function data = VarData(data)
+    [~, kLen, snrLen] = size(data(1, :, :));
+    out = zeros(kLen, snrLen);
+    for k=1:kLen
+        out(k, :) = var(data(:, k, :));
+    end
+    data = out;
 end
