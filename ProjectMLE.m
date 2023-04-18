@@ -34,6 +34,8 @@ omegaErrorData = zeros(MaxIter,IterK, IterSnr);
 crlbPhiData = zeros(MaxIter, IterSnr);
 crlbOmegaData = zeros(MaxIter, IterSnr);
 for i = 1:MaxIter
+    NumI = randn(1, N);
+    NumR = randn(1, N)*1i;
     for jk = 1:IterK
         M = 2^kvec(jk);
         for jsnr = 1:IterSnr
@@ -43,8 +45,8 @@ for i = 1:MaxIter
             tmp = 10^(SNR/10);
             sigma2 = (A^2)/(2*tmp);
             sigma = sqrt(sigma2);
-            wgnR = sigma*randn(1, N);
-            wgnI = sigma*randn(1, N)*1i;
+            wgnR = sigma*NumR;
+            wgnI = sigma*NumI;
             wgn = wgnR+wgnI;
             % Create signal x[n] with zero padding:
             x = A*exp(1i*(w0*n*T+phi))+wgn;
@@ -70,43 +72,69 @@ for i = 1:MaxIter
     end
 end
 % Store data:
-save("Data1a", "phiData", "omegaData", "crlbPhiData", "crlbOmegaData");
-%save("Data1aAscii", "phiData", "omegaData", "crlbPhiData","crlbOmegaData", "-ascii", "-double", "-tabs"); 
-%Must convert to 2D array if textfile
+save("Data1a", "phiData", "omegaData", "crlbPhiData", "crlbOmegaData", "omegaErrorData", "phiErrorData");
 %% Create plots:
 load("Data1a.mat")
 SNRvec = -10:10:60;
 kvec = 10:2:20;
-%1)
-% Variasn til wFFT mot CRLB for k og snr
+% Variance of w and phi against crlb for k and snr
 f1 = figure(1); clf(f1);
-%title("Variance for ")
 subplot(121);
 hold on; grid on;
-crlbW = log(crlbOmegaData); % Nå i Hz^2
+crlbW = log(crlbOmegaData(1, :)); % Nå i Hz^2
 varE_w = log(VarData(omegaErrorData));
-% ønsker var av freqError
+% var(w)
 h(1, :) = plot(SNRvec, crlbW, 'b', "LineWidth", 2);
 i = 1;
-cleanVecs = [8, 8, 8, 8, 8, 8];
 for k = 1:IterK
     h(i+1) = plot(SNRvec(1:end), varE_w(k, 1:end), "LineWidth", 2);
     i = i + 1;
 end
+title("Variance of frequency estimation error");
+ylabel("log[Var($$\hat{\omega}$$)]", 'Interpreter','latex', 'FontSize', 14); 
+xlabel("SNR");
 legend(h, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}")
-%%
-% Varians til phiEst mot CRLB for k og snr
+% var(phi)
 subplot(122);
 hold on; grid on;
-crlbPhi = (MeanCRLB(crlbPhiData));
-varPhi = VarData(phiData);
-plot(SNRvec, log(crlbPhi), 'b', "LineWidth", 2);
+crlbPhi = log(crlbPhiData(1, :));
+varPhi = log(VarData(phiErrorData));
+h2(1, :)=plot(SNRvec, crlbPhi, 'b', "LineWidth", 2);
+i=1;
 for k= 1:IterK
-    plot(SNRvec, log(varPhi(k, :)), "LineWidth", 2);
+    h2(i+1)= plot(SNRvec, varPhi(k, :), "LineWidth", 2);
+    i= i+1;
 end
-legend("CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+title("Variance of phase estimation error")
+ylabel("log[Var($$\hat{\phi}$$)]", 'Interpreter','latex', 'FontSize', 14); 
+xlabel("SNR");
+legend(h2, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
 exportgraphics(f1, "VarPhiOmega.eps")
+%%
+% e_w for k and snr.
+f2 = figure(2); clf;
+subplot(121);
+hold on; grid on;
+meanW = MeanData(omegaErrorData)
+for k=1:IterK
+    h4(k) = plot(SNRvec, abs(meanW(k, :)), "LineWidth", 2);
+end
+title("Average error of $$\hat{\omega}$$ for all k", 'Interpreter', 'latex', 'FontSize',11);
+ylabel("$$\omega_0-\hat{\omega}$$", 'Interpreter', 'latex', 'FontSize', 11);
+xlabel("SNR");
+legend("M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
 
+subplot(122)
+hold on; grid on;
+meanPhi = MeanData(phiErrorData);
+for k=1:IterK
+    h3(k) = plot(SNRvec, abs(meanPhi(k, :)), "LineWidth", 2);
+end
+title("Average error of $$\hat{\phi}$$ for all k", 'Interpreter', 'latex','FontSize',11);
+ylabel("$$\phi-\hat{\phi}$$", 'Interpreter', 'latex', 'FontSize', 11);
+xlabel("SNR");
+legend("M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+exportgraphics(f2, "MeanPhiOmega.eps")
 % 2)
 % Gjennosnittlig frekvesnavvik wFFT mot w0 for k og snr
 % Gjnsnlig faseavvik phiEst mot phi for k og snr
@@ -158,10 +186,6 @@ function mse = fun(w, absxFFT, n0, n, N, T, A, z, M, x)
     mse = sqrt(mean((error).^2));
 end
 
-function crlb = MeanCRLB(crlbData)
-    crlb = var(crlbData);
-end
-
 function data = VarData(data)
     [~, kLen, snrLen] = size(data(1, :, :));
     out = zeros(kLen, snrLen);
@@ -170,3 +194,13 @@ function data = VarData(data)
     end
     data = out;
 end
+
+function data = MeanData(data)
+    [~, kLen, snrLen] = size(data(1, :, :));
+    out = zeros(kLen, snrLen);
+    for k=1:kLen
+        out(k, :) = mean(data(:, k, :));
+    end
+    data = out;
+end
+
