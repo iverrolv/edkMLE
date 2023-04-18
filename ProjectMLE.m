@@ -24,11 +24,13 @@ k = 20;
 kvec = 10:2:20;
 IterK = length(kvec);
 M = 2^k;
-MaxIter = 10;
+MaxIter = 1000;
 
 % Data matrices:
 phiData = zeros(MaxIter,IterK, IterSnr);
 omegaData = zeros(MaxIter,IterK, IterSnr);
+phiErrorData = zeros(MaxIter,IterK, IterSnr);
+omegaErrorData = zeros(MaxIter,IterK, IterSnr);
 crlbPhiData = zeros(MaxIter, IterSnr);
 crlbOmegaData = zeros(MaxIter, IterSnr);
 for i = 1:MaxIter
@@ -59,7 +61,9 @@ for i = 1:MaxIter
             phiEst = angle(exp(-1i*wFFT*n0*T)*F(wFFT));
             % Store data
             phiData(i, jk, jsnr) = phiEst;
+            phiErrorData(i, jk, jsnr) = phi - phiEst;
             omegaData(i, jk, jsnr) = wFFT;
+            omegaErrorData(i, jk, jsnr) = w0 - wFFT;
             crlbPhiData(i, jsnr) = crlbPhase;
             crlbOmegaData(i, jsnr) = crlbFreq;
         end
@@ -76,20 +80,21 @@ kvec = 10:2:20;
 %1)
 % Variasn til wFFT mot CRLB for k og snr
 f1 = figure(1); clf(f1);
-title("Variance for ")
+%title("Variance for ")
 subplot(121);
 hold on; grid on;
-crlbW = log((crlbOmegaData./(4*(pi^2)))); % Nå i Hz^2
+crlbW = log(crlbOmegaData); % Nå i Hz^2
+varE_w = log(VarData(omegaErrorData));
 % ønsker var av freqError
-varW = VarData(omegaData);
-plot(SNRvec, crlbW, 'b', "LineWidth", 2);
+h(1, :) = plot(SNRvec, crlbW, 'b', "LineWidth", 2);
 i = 1;
-cleanVecs = [1, 1, 3, 5, 6, 7];  % mh...
+cleanVecs = [8, 8, 8, 8, 8, 8];
 for k = 1:IterK
-    plot(SNRvec(1:cleanVecs(i)), log(varW(k, 1:cleanVecs(i))), "LineWidth", 2);
+    h(i+1) = plot(SNRvec(1:end), varE_w(k, 1:end), "LineWidth", 2);
     i = i + 1;
 end
-legend("CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}")
+legend(h, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}")
+%%
 % Varians til phiEst mot CRLB for k og snr
 subplot(122);
 hold on; grid on;
@@ -161,7 +166,7 @@ function data = VarData(data)
     [~, kLen, snrLen] = size(data(1, :, :));
     out = zeros(kLen, snrLen);
     for k=1:kLen
-        out(k, :) = var(data(:, k, :));
+        out(k, :) = var(data(:, k, :), 0, 1);
     end
     data = out;
 end
