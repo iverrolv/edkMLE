@@ -36,28 +36,30 @@ crlbOmegaData = zeros(MaxIter, IterSnr);
 for i = 1:MaxIter
     NumI = randn(1, N);
     NumR = randn(1, N)*1i;
-    for jk = 1:IterK
-        M = 2^kvec(jk);
-        for jsnr = 1:IterSnr
-            SNR = SNRvec(jsnr);
+    for jsnr = 1:IterSnr
+        SNR = SNRvec(jsnr);
+        % White noise signal:
+        tmp = 10^(SNR/10);
+        sigma2 = (A^2)/(2*tmp);
+        sigma = sqrt(sigma2);
+        wgnR = sigma*NumR;
+        wgnI = sigma*NumI;
+        wgn = wgnR+wgnI;
+        % Create signal x[n] with zero padding:
+        x = A*exp(1i*(w0*n*T+phi))+wgn;
+        xpad = [x zero_pad];
+        % CRLB for phase and freq:
+        crlbFreq = (12*sigma2)/((A^2)*(T^2)*N*(N^2-1));
+        crlbPhase =(12*sigma2*((n0^2)*N+2*n0*P+Q))/((A^2)*(N^2)*(N^2-1)); 
+        for jk = 1:IterK
+            M = 2^kvec(jk);
             % For every k, caclulate for all SNR values.
-            % White noise signal:
-            tmp = 10^(SNR/10);
-            sigma2 = (A^2)/(2*tmp);
-            sigma = sqrt(sigma2);
-            wgnR = sigma*NumR;
-            wgnI = sigma*NumI;
-            wgn = wgnR+wgnI;
-            % Create signal x[n] with zero padding:
-            x = A*exp(1i*(w0*n*T+phi))+wgn;
-            xpad = [x zero_pad];
-            % CRLB for phase and freq:
-            crlbFreq = (12*sigma2)/((A^2)*(T^2)*N*(N^2-1));
-            crlbPhase =(12*sigma2*((n0^2)*N+2*n0*P+Q))/((A^2)*(N^2)*(N^2-1)); 
             % Frequency estimation:
             xFFT = fft(xpad, M);
+
             [~, mstar] = max(abs(xFFT));
             wFFT = 2*pi/(M*T)*mstar;
+            
             % Phase estimation:
             F = @(w) 1/N*sum(x.*exp(-1i*w*(0:1:N-1)*T));
             phiEst = angle(exp(-1i*wFFT*n0*T)*F(wFFT));
@@ -82,7 +84,7 @@ f1 = figure(1); clf(f1);
 subplot(121);
 hold on; grid on;
 crlbW = log(crlbOmegaData(1, :)); % Nå i Hz^2
-varE_w = log(VarData(omegaErrorData));
+varE_w = log(VarData(omegaData));
 % var(w)
 h(1, :) = plot(SNRvec, crlbW, 'b', "LineWidth", 2);
 i = 1;
@@ -115,25 +117,27 @@ exportgraphics(f1, "VarPhiOmega.eps")
 f2 = figure(2); clf;
 subplot(121);
 hold on; grid on;
+%meanW = MeanData(omegaData);
+%meanW = w0-meanW;
 meanW = MeanData(omegaErrorData)
 for k=1:IterK
-    h4(k) = plot(SNRvec, abs(meanW(k, :)), "LineWidth", 2);
+    h4(k) = plot(SNRvec, meanW(k, :), "LineWidth", 2);
 end
 title("Average error of $$\hat{\omega}$$ for all k", 'Interpreter', 'latex', 'FontSize',11);
 ylabel("$$\omega_0-\hat{\omega}$$", 'Interpreter', 'latex', 'FontSize', 11);
 xlabel("SNR");
-legend("M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+legend(h4, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
 
 subplot(122)
 hold on; grid on;
 meanPhi = MeanData(phiErrorData);
 for k=1:IterK
-    h3(k) = plot(SNRvec, abs(meanPhi(k, :)), "LineWidth", 2);
+    h3(k) = plot(SNRvec, meanPhi(k, :), "LineWidth", 2);
 end
 title("Average error of $$\hat{\phi}$$ for all k", 'Interpreter', 'latex','FontSize',11);
 ylabel("$$\phi-\hat{\phi}$$", 'Interpreter', 'latex', 'FontSize', 11);
 xlabel("SNR");
-legend("M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+legend(h3, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
 exportgraphics(f2, "MeanPhiOmega.eps")
 % 2)
 % Gjennosnittlig frekvesnavvik wFFT mot w0 for k og snr
