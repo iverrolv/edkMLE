@@ -1,6 +1,6 @@
 clc;
 clear;
-store_data = true;
+store_data = false;
 
 % Consts
 Fs = 1e6;
@@ -28,28 +28,32 @@ IterK = length(kvec);
 M = 2^k;
 MaxIter = 100;
 
+% Function for phase estimation:
 F = @(w, x) 1/N*sum(x.*exp(-1i*w*(0:1:N-1)*T));
 
 % Data matrices:
+phiBuffer = zeros(1, MaxIter);
 phiData = zeros(IterK, IterSnr);
 phiVar = zeros(IterK, IterSnr);
 phiErrorData = zeros(IterK, IterSnr);
 
+omegaBuffer = zeros(1, MaxIter);
 omegaErrorData = zeros(IterK, IterSnr);
 omegaData = zeros(IterK, IterSnr);
 omegaVar = zeros(IterK, IterSnr);
 
 crlbPhiData = zeros(1, IterSnr);
 crlbOmegaData = zeros(1, IterSnr);
-FinEstData = zeros(IterSnr);
-
-omegaBuffer = zeros(1, MaxIter);
-phiBuffer = zeros(1, MaxIter);
 
 finEstBuffer = zeros(1, MaxIter);
-finEst = zeros(1, IterSnr);
+finEstMean = zeros(1, IterSnr);
 finEstVar = zeros(1, IterSnr);
 finEstError = zeros(1, IterSnr);
+
+finEstAngleBuffer = zeros(1, IterSnr);
+finEstAngleMean = zeros(1, IterSnr);
+finEstAngleVar = zeros(1, IterSnr);
+finEstAngleError = zeros(1, IterSnr);
 
 
 % create crlb:
@@ -91,11 +95,10 @@ for ik = 1:IterK
             % Store data
             omegaBuffer(i) = wFFT;
             phiBuffer(i) = phiEst;
-            wFFT;
             if kvec(ik) == 10
-                [wOpt, fval, exitflag, output] = fminsearch(@(w)obj(w, xFFT, x, A, n, T, F), w0);
+                [wOpt, fval, exitflag, output] = fminsearch(@(w)obj(w, x, A, n, T, F), 6);
                 finEstBuffer(i)= wOpt;
-                wOpt;
+                finEstAngleBuffer(i) = angle(exp(-1i*wOpt*n(1)*T)*F(wOpt, x));
             end
         end
         % Store estimate for each k, for each snr:")
@@ -106,20 +109,21 @@ for ik = 1:IterK
         omegaVar(ik, jsnr) = variance(omegaBuffer, w0);
         omegaErrorData(ik, jsnr) = w0 - omegaData(ik, jsnr);
         if kvec(ik) == 10
-            finEst(jsnr) = mean(finEstBuffer);
-            finEstError(jsnr) = w0-finEst(jsnr);
+            finEstMean(jsnr) = mean(finEstBuffer);
+            finEstError(jsnr) = w0-finEstMean(jsnr);
             finEstVar(jsnr) = variance(finEstBuffer, w0);
+
+            finEstAngleMean(jsnr) = mean(finEstAngleBuffer); 
+            finEstAngleError(jsnr) = phi - finEstAngleMean(jsnr);
+            finEstAngleVar(jsnr) = variance(finEstAngleVar, phi);
         end
-
-
     end
 end
 % Store data:
 if store_data
-    save("Data1a", "omegaData", "omegaVar", "omegaErrorData", "phiData", "phiErrorData", "phiVar", "finEstVar", "finEstError", "FinEstData");
+    save("Data1a", "omegaData", "omegaVar", "omegaErrorData", "phiData", "phiErrorData", "phiVar", "finEstVar", "finEstError", "FinEst");
 end
 %% Create plots:
-%load("Data1a.mat")
 SNRvec = -10:10:60;
 kvec = 10:2:20;
 % Plot Variance of MLE:
@@ -134,8 +138,8 @@ for k = 1:IterK
     h(i+1) = plot(SNRvec(1:end), log(omegaVar(k, 1:end)), "LineWidth", 2);
     i = i + 1;
 end
-title("Variance of frequency estimation error");
-ylabel("log[Var($$\hat{\omega}$$)]", 'Interpreter','latex', 'FontSize', 14); 
+title("Variance of frequency estimation error",'Interpreter', 'latex', 'fontsize', 11);
+ylabel("log[Var($$\hat{\omega}$$)]", 'Interpreter','latex', 'FontSize', 11); 
 xlabel("SNR");
 legend(h, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}")
 % var(phi)
@@ -148,10 +152,10 @@ for k= 1:IterK
     h2(i+1)= plot(SNRvec, log(phiVar(k, :)), "LineWidth", 2);
     i= i+1;
 end
-title("Variance of phase estimation error")
-ylabel("log[Var($$\hat{\phi}$$)]", 'Interpreter','latex', 'FontSize', 14); 
+title("Variance of phase estimation error",'Interpreter', 'latex', 'fontsize', 11)
+ylabel("log[Var($$\hat{\phi}$$)]", 'Interpreter','latex', 'FontSize', 11); 
 xlabel("SNR");
-legend(h2, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+legend(h2, "CRLB", "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}", "Location", "best");
 
 
 % Plot Error of MLE:
@@ -165,7 +169,7 @@ end
 title("Average error of $$\hat{\omega}$$ for all k", 'Interpreter', 'latex', 'FontSize',11);
 ylabel("$$\omega_0-\hat{\omega}$$", 'Interpreter', 'latex', 'FontSize', 11);
 xlabel("SNR");
-legend(h4, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+legend(h4, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}", "Location", "best");
 
 subplot(122)
 hold on; grid on;
@@ -175,7 +179,7 @@ end
 title("Average error of $$\hat{\phi}$$ for all k", 'Interpreter', 'latex','FontSize',11);
 ylabel("$$\phi-\hat{\phi}$$", 'Interpreter', 'latex', 'FontSize', 11);
 xlabel("SNR");
-legend(h3, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}");
+legend(h3, "M=2^{10}", "2^{12}", "2^{14}", "2^{16}", "2^{18}", "2^{20}", "Location", "best");
 
 % Plot fine tuned estimate:
 f3 = figure(3); clf(f3);
@@ -186,27 +190,59 @@ plot(SNRvec, log(omegaVar(1,:)), 'black', 'Linewidth', 2)
 plot(SNRvec, log(finEstVar), 'r', "LineWidth",2);
 plot(SNRvec, (crlbW), 'b', "LineWidth", 2);
 plot(SNRvec, log(omegaVar(6, :)), 'y', "LineWidth",2)
-legend("k=10", "Finetuned Estimate", "CRLB", "k=20")  
+legend("k=10", "Finetuned Estimate", "CRLB", "k=20", "Location", "best")  
+title("Variance of frequency estimation error", 'Interpreter', 'latex', 'FontSize',11);
+ylabel("log[Var($$\hat{\omega}$$)]", 'Interpreter', 'latex', 'FontSize',11);
+xlabel("SNR");
 subplot(122)
 hold on; grid on;
-
 plot(SNRvec, omegaErrorData(6, :), 'y', "LineWidth", 2);
 plot(SNRvec, omegaErrorData(1, :), 'black', "LineWidth", 2);
 plot(SNRvec, (finEstError), 'r', "LineWidth", 2)
-legend( "k=20", "k=10","Finetuned Estimate")
+legend( "k=20", "k=10","Finetuned Estimate", "Location", "best")
+title("Average error of $$\hat{\omega}$$", 'Interpreter', 'latex', 'FontSize',11);
+ylabel("$$\omega_0-\hat{\omega}$$", 'Interpreter', 'latex', 'FontSize',11);
+xlabel("SNR");
+
+
+f4 = figure(4); clf(f4);
+subplot(121)
+hold on; grid on;
+%varFinest = var(FinEstData, 0, 1);
+plot(SNRvec, log(phiVar(1,:)), 'black', 'Linewidth', 2)
+plot(SNRvec, log(finEstAngleVar), 'r', "LineWidth",2);
+plot(SNRvec, (crlbPhi), 'b', "LineWidth", 2);
+plot(SNRvec, log(phiVar(6, :)), 'y', "LineWidth",2)
+legend("k=10", "Finetuned Estimate", "CRLB", "k=20", "Location", "best")  
+title("Variance of angle estimation error", 'Interpreter', 'latex', 'FontSize',11);
+ylabel("log[Var($$\hat{\phi}$$)]", 'Interpreter', 'latex', 'FontSize',11);
+xlabel("SNR");
+subplot(122)
+hold on; grid on;
+plot(SNRvec, phiErrorData(6, :), 'y', "LineWidth", 2);
+plot(SNRvec, phiErrorData(1, :), 'black', "LineWidth", 2);
+plot(SNRvec, (finEstAngleError), 'r', "LineWidth", 2)
+legend( "k=20", "k=10","Finetuned Estimate", "Location", "best")
+title("Average error of $$\hat{\phi}$$", 'Interpreter', 'latex', 'FontSize',11);
+ylabel("$$\phi-\hat{\phi}$$", 'Interpreter', 'latex', 'FontSize',11);
+xlabel("SNR");
 
 if store_data
     exportgraphics(f1, "VarPhiOmega.eps")
     exportgraphics(f2, "MeanPhiOmega.eps")
     exportgraphics(f3, "FinEstimate.eps")
+    exportgraphics(f4, "MSE.eps")
 end
-%% Functions
-function J = obj(w, fftX, x, A, n, T, fun)
+
+%% Functions: Objective, MeanSquareError, Variance around given mean.
+function J = obj(w, x, A, n, T, fun)
+    xreal = real(x);
+    xim = imag(x);
     p = angle(exp(-1i*w*n(1)*T)*fun(w, x));
-    %p = pi/8;
     s = A*exp(1i*(w*n*T+p)); % Create a guess signal
-    fftGuess = fft(s, 2^10);
-    J = meanSquareError(abs(fftGuess), abs(fftX));
+    sreal = real(s);
+    sim = imag(s);
+    J = meanSquareError(sreal, xreal) + meanSquareError(sim, xim);
 end
 
 function mse = meanSquareError(arr1, arr2)
